@@ -265,10 +265,11 @@ class BookAPIClient:
 class BookISBNExtractor:
     """Main class that orchestrates the ISBN extraction and book information retrieval."""
     
-    def __init__(self, api_delay: float = 1.0):
+    def __init__(self, api_delay: float = 1.0, skip_api: bool = False):
         self.image_processor = ImageProcessor()
         self.isbn_extractor = ISBNExtractor()
-        self.api_client = BookAPIClient(api_delay)
+        self.api_client = BookAPIClient(api_delay) if not skip_api else None
+        self.skip_api = skip_api
     
     def process_folder(self, folder_path: str, output_csv: str = 'book_information.csv') -> None:
         """Process all images in a folder and extract book information."""
@@ -283,12 +284,13 @@ class BookISBNExtractor:
         all_isbns = {}  # ISBN -> [file_names]
         
         # Process each image file
-        for image_file in image_files:
-            logger.info(f"Processing image: {os.path.basename(image_file)}")
+        for i, image_file in enumerate(image_files, 1):
+            logger.info(f"Processing image {i}/{len(image_files)}: {os.path.basename(image_file)}")
             
             # Optimize image for OCR
             optimized_image = self.image_processor.optimize_image_for_ocr(image_file)
             if optimized_image is None:
+                logger.warning(f"Failed to optimize image: {os.path.basename(image_file)}")
                 continue
             
             # Extract text using OCR
@@ -299,6 +301,8 @@ class BookISBNExtractor:
             
             # Extract ISBNs from text
             isbns = self.isbn_extractor.extract_isbns_from_text(text)
+            if not isbns:
+                logger.info(f"No ISBNs found in {os.path.basename(image_file)}")
             
             for isbn in isbns:
                 if isbn not in all_isbns:
@@ -313,13 +317,29 @@ class BookISBNExtractor:
         
         # Get book information for all unique ISBNs
         book_data = []
-        for isbn, source_files in all_isbns.items():
-            logger.info(f"Retrieving book information for ISBN: {isbn}")
+        for i, (isbn, source_files) in enumerate(all_isbns.items(), 1):
+            if self.skip_api:
+                logger.info(f"Skipping API call for ISBN: {isbn} (offline mode)")
+                book_data.append({
+                    'isbn': isbn,
+                    'title': 'API calls disabled',
+                    'authors': 'Unknown',
+                    'publisher': 'Unknown',
+                    'published_date': 'Unknown',
+                    'description': '',
+                    'page_count': 'Unknown',
+                    'language': 'Unknown',
+                    'source_files': ', '.join(source_files)
+                })
+                continue
+                
+            logger.info(f"Retrieving book information {i}/{len(all_isbns)} for ISBN: {isbn}")
             book_info = self.api_client.get_book_info(isbn)
             
             if book_info:
                 book_info['source_files'] = ', '.join(source_files)
                 book_data.append(book_info)
+                logger.info(f"✓ Found book: {book_info.get('title', 'Unknown')}")
             else:
                 # Add entry even if API call failed
                 book_data.append({
@@ -333,6 +353,7 @@ class BookISBNExtractor:
                     'language': 'Unknown',
                     'source_files': ', '.join(source_files)
                 })
+                logger.warning(f"✗ No information found for ISBN: {isbn}")
         
         # Save to CSV
         self._save_to_csv(book_data, output_csv)
@@ -356,6 +377,8 @@ def main():
                        help='Output CSV file name (default: book_information.csv)')
     parser.add_argument('--api-delay', type=float, default=1.0,
                        help='Delay between API calls in seconds (default: 1.0)')
+    parser.add_argument('--skip-api', action='store_true',
+                       help='Skip API calls and only extract ISBNs (offline mode)')
     
     args = parser.parse_args()
     
@@ -363,7 +386,7 @@ def main():
         logger.error(f"Folder does not exist: {args.folder_path}")
         return
     
-    extractor = BookISBNExtractor(api_delay=args.api_delay)
+    extractor = BookISBNExtractor(api_delay=args.api_delay, skip_api=args.skip_api)
     extractor.process_folder(args.folder_path, args.output)
 
 
