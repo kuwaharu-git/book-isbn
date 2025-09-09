@@ -1,12 +1,11 @@
 # Book ISBN Extractor
 
-A Python system that automatically extracts ISBN information from images in a folder and retrieves book details from external APIs.
+A Python system that automatically extracts ISBN information from book cover images using barcode recognition and retrieves book details from external APIs.
 
 ## Features
 
-- **Image Processing**: Automatically optimizes images for OCR processing (resize, grayscale, binarization, rotation correction)
-- **OCR Processing**: Uses Tesseract OCR to extract text from images
-- **ISBN Extraction**: Uses regex patterns to identify and validate ISBN-10 and ISBN-13 numbers
+- **Barcode Recognition**: Uses pyzbar to detect and decode barcodes (EAN-13) from book cover images
+- **ISBN Extraction**: Extracts 13-digit ISBN numbers starting with 978 or 979 from barcodes
 - **Book Information Retrieval**: Fetches detailed book information from Google Books API
 - **CSV Output**: Exports collected data to CSV format for easy management
 - **Error Handling**: Robust error handling with logging for debugging
@@ -14,9 +13,33 @@ A Python system that automatically extracts ISBN information from images in a fo
 
 ## System Requirements
 
-- Python 3.7 or higher
-- Tesseract OCR engine (system installation required)
-- Internet connection for API calls
+
+### Required Python Packages
+
+The following Python packages are required (automatically installed via `requirements.txt`):
+
+- pyzbar
+- opencv-python
+- pandas
+- requests
+- numpy
+- Pillow
+
+You also need the **zbar** shared library for barcode recognition:
+- On macOS: Install via Homebrew
+	```sh
+	brew install zbar
+	```
+	If you get an error like `Unable to find zbar shared library`, you may need to set the library path:
+	```sh
+	export DYLD_LIBRARY_PATH=/opt/homebrew/lib:$DYLD_LIBRARY_PATH
+	```
+	(If your Homebrew is installed in `/usr/local`, use `/usr/local/lib` instead.)
+- On Ubuntu/Debian: Install via apt
+	```sh
+	sudo apt-get install libzbar0
+	```
+- On Windows: See [pyzbar documentation](https://github.com/NaturalHistoryMuseum/pyzbar#installation)
 
 ## Installation
 
@@ -29,22 +52,6 @@ cd book-isbn
 2. Install Python dependencies:
 ```bash
 pip install -r requirements.txt
-```
-
-3. Install Tesseract OCR:
-
-### Windows
-Download and install from: https://github.com/UB-Mannheim/tesseract/wiki
-
-### macOS
-```bash
-brew install tesseract
-```
-
-### Ubuntu/Debian
-```bash
-sudo apt-get update
-sudo apt-get install tesseract-ocr
 ```
 
 ## Usage
@@ -91,23 +98,18 @@ The system generates a CSV file with the following columns:
 ## Process Flow
 
 1. **Folder Scanning**: Searches for all supported image files in the specified folder
-2. **Image Optimization**: 
-   - Resizes large images for processing efficiency
-   - Converts to grayscale
-   - Applies adaptive thresholding for binarization
-   - Corrects rotation using Hough line detection
-3. **OCR Processing**: Extracts text using Tesseract OCR
-4. **ISBN Extraction**: Uses regex patterns to find and validate ISBN numbers
-5. **Duplicate Removal**: Eliminates duplicate ISBNs from different images
-6. **API Calls**: Retrieves book information from Google Books API
-7. **CSV Export**: Saves all collected data to CSV format
+2. **Barcode Recognition**: Detects and decodes barcodes from images
+3. **ISBN Extraction**: Extracts and validates ISBN numbers from barcode data
+4. **Duplicate Removal**: Eliminates duplicate ISBNs from different images
+5. **API Calls**: Retrieves book information from Google Books API
+6. **CSV Export**: Saves all collected data to CSV format
 
 ## Error Handling
 
 The system handles various error conditions:
 
 - **Unreadable Images**: Logs warning and continues processing
-- **OCR Failures**: Logs error and continues with next image
+- **Barcode Recognition Failures**: Logs error and continues with next image
 - **API Failures**: Logs error but still includes ISBN in output with "Information not found"
 - **Invalid ISBNs**: Validates checksums before processing
 - **Network Issues**: Includes timeout and retry mechanisms
