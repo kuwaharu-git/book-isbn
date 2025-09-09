@@ -133,3 +133,5 @@ book_isbn_extractor.log
 book_information.csv
 *.csv
 test_images/
+
+images/
